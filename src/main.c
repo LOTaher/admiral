@@ -56,7 +56,6 @@ void* network_loop(void* args) {
 
     for (;;) {
         memset(logBuffer, 0, sizeof(logBuffer));
-        stmp_log_print("admiral", "Waiting for connection", STMP_PRINT_TYPE_INFO);
 
         struct sockaddr_in clientAddr;
         socklen_t clientLength = sizeof(clientAddr);
@@ -83,7 +82,6 @@ void* network_loop(void* args) {
         snprintf(logBuffer, sizeof(logBuffer), "Accepted connection from [%s]", endpoint);
         stmp_log_print("admiral", logBuffer, STMP_PRINT_TYPE_INFO);
 
-        u64 mark = arena_mark(networkArena);
         stmp_packet* readPacket = arena_push(networkArena, sizeof(stmp_packet));
         stmp_packet sendPacket;
         stmp_result result;
@@ -95,17 +93,16 @@ void* network_loop(void* args) {
 
         stmp_error error = stmp_net_recv_packet(connectionFd, buffer, sizeof(buffer), readPacket, &result);
         if (error != STMP_ERR_NONE) {
-            arena_pop(networkArena, mark);
             close(connectionFd);
             memset(logBuffer, 0, sizeof(logBuffer));
             snprintf(logBuffer, sizeof(logBuffer), "Recieved bad packet from [%s]. Closing connection", endpoint);
             stmp_log_print("admiral", logBuffer, STMP_PRINT_TYPE_ERROR);
+            arena_clear(networkArena);
             continue;
         }
 
-        s8 p = stmp_admiral_parse_and_queue_packet(a->queue, readPacket, endpoint);
+        s8 p = stmp_admiral_add_packet_to_queue(a->queue, readPacket, endpoint);
         if (p == -1) {
-            arena_pop(networkArena, mark);
             stmp_admiral_invalidate_packet(&sendPacket);
             stmp_error send_error = stmp_net_send_packet(connectionFd, &sendPacket, &result);
 
@@ -117,13 +114,11 @@ void* network_loop(void* args) {
             memset(logBuffer, 0, sizeof(logBuffer));
             snprintf(logBuffer, sizeof(logBuffer), "Recieved invalid admiral packet from [%s]. Closing connection", endpoint);
             stmp_log_print("admiral", logBuffer, STMP_PRINT_TYPE_ERROR);
+            arena_clear(networkArena);
             continue;
         }
 
-        memset(logBuffer, 0, sizeof(logBuffer));
-        snprintf(logBuffer, sizeof(logBuffer), "Message from [%s] queued. Closing connection", endpoint);
-        stmp_log_print("admiral", logBuffer, STMP_PRINT_TYPE_INFO);
-        arena_pop(networkArena, mark);
+        arena_clear(networkArena);
         close(connectionFd);
     }
 
@@ -148,11 +143,13 @@ void* admiral_loop(void* args) {
             continue;
         }
 
-        stmp_admiral_message_endpoint_names endpoints = stmp_admiral_get_endpoint(msg);
+        char* destinationName = stmp_admiral_map_id_to_endpoint(msg->packet.payload[0]);
+        char* senderName = stmp_admiral_map_id_to_endpoint(msg->packet.payload[1]);
+
         stmp_admiral_sanitize_message(msg);
 
         snprintf(logBuffer, sizeof(logBuffer), "Forwarding message to [%s] from [%s]",
-                 endpoints.destination, endpoints.sender);
+                 destinationName, senderName);
 
         stmp_log_print("admiral", logBuffer, STMP_PRINT_TYPE_INFO);
     }

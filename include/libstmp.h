@@ -15,10 +15,11 @@
 // Net
 // ===============================================================
 
+// TODO(laith): this about making these two static helpers within the lib c file to prevent extrernal linkage
 stmp_error stmp_net_send_packet(u32 fd, const stmp_packet* packet, stmp_result* result);
 stmp_error stmp_net_recv_packet(u32 fd, u8* buffer, size_t size, stmp_packet* packet, stmp_result* result);
-
 char* stmp_net_get_client(u32 fd, mem_arena* arena);
+stmp_error stmp_net_send_packet_to_admiral(char* endpoint, const stmp_packet* packet, stmp_result* result);
 
 // ===============================================================
 // Log
@@ -58,15 +59,15 @@ void stmp_log_print(const char* service, const char* message, stmp_log_print_typ
 #define ADMIRAL_ENDPOINT_SCHEDULER "100.103.121.7:6767"
 
 typedef struct {
-    u8 destination;
-    u8 sender;
+    u8 destinationId;
+    u8 senderId;
     stmp_packet packet;
 } stmp_admiral_message;
 
 typedef struct {
-    char* destination;
-    char* sender;
-} stmp_admiral_message_endpoint_names;
+    char* name;
+    u8 id;
+} stmp_admiral_message_endpoint_metadata;
 
 typedef struct {
     mem_arena* arena;
@@ -97,10 +98,12 @@ typedef struct {
 void stmp_admiral_queue_init(stmp_admiral_queue* queue, u8 capacity);
 s8 stmp_admiral_queue_enqueue(stmp_admiral_queue* queue, const stmp_admiral_message* message);
 stmp_admiral_message* stmp_admiral_queue_dequeue(stmp_admiral_queue* queue);
-s8 stmp_admiral_parse_and_queue_packet(stmp_admiral_queue* queue, stmp_packet* packet, char* endpoint);
+
+s8 stmp_admiral_add_packet_to_queue(stmp_admiral_queue* queue, stmp_packet* packet, char* endpoint);
 void stmp_admiral_invalidate_packet(stmp_packet* packet);
-stmp_admiral_message_endpoint_names stmp_admiral_get_endpoint(stmp_admiral_message* message);
 void stmp_admiral_sanitize_message(stmp_admiral_message* message);
+
 char* stmp_admiral_map_client_to_endpoint(char* client);
+char* stmp_admiral_map_id_to_endpoint(u8 id);
 
 #endif // LIBSTMP_H

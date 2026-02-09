@@ -100,6 +100,13 @@ char* stmp_net_get_client(u32 fd, mem_arena* arena) {
     return allocatedName;
 }
 
+
+// stmp_error stmp_net_send_packet_to_admiral(char* endpoint, const stmp_packet* packet, stmp_result* result) {
+//     mem_arena* arena = arena_create(KiB(8));
+//
+//     return NULL;
+// }
+
 // ===============================================================
 // Log
 // ===============================================================
@@ -198,12 +205,12 @@ stmp_admiral_message* stmp_admiral_queue_dequeue(stmp_admiral_queue* queue) {
 // this function ends, we can safely pop the packet memory of the network arena and start again
 //
 // Do NOT share memory across threads!
-s8 stmp_admiral_parse_and_queue_packet(stmp_admiral_queue* queue, stmp_packet* packet, char* endpoint) {
+s8 stmp_admiral_add_packet_to_queue(stmp_admiral_queue* queue, stmp_packet* packet, char* endpoint) {
     char logBuffer[255] = {0};
 
     // NOTE(laith): this should be [dest][sender][EMPTY PAYLOAD BYTE] at the minimum
     if (packet->payload_length < 3) {
-        return STMP_ERR_BAD_PAYLOAD;
+        return -1;
     }
 
     u8 destination = packet->payload[0];
@@ -211,7 +218,7 @@ s8 stmp_admiral_parse_and_queue_packet(stmp_admiral_queue* queue, stmp_packet* p
 
     if ((destination < ADMIRAL || destination > SCHEDULER) ||
         (sender < ADMIRAL || destination > SCHEDULER)) {
-        return STMP_ERR_BAD_PAYLOAD;
+        return -1;
     }
 
     switch (sender) {
@@ -270,18 +277,6 @@ void stmp_admiral_sanitize_message(stmp_admiral_message* message) {
     message->packet.payload_length = sanitizedPayloadSize;
 }
 
-stmp_admiral_message_endpoint_names stmp_admiral_get_endpoint(stmp_admiral_message* message) {
-    u8 destination = message->packet.payload[0];
-    u8 sender = message->packet.payload[1];
-
-    stmp_admiral_message_endpoint_names names = {
-        .destination = stmp_admiral_endpoints[destination],
-        .sender = stmp_admiral_endpoints[sender],
-    };
-
-    return names;
-}
-
 void stmp_admiral_invalidate_packet(stmp_packet* packet) {
     packet->type = STMP_TYPE_INVALID;
     packet->arg = STMP_ARG_INVALID_PAYLOAD;
@@ -304,5 +299,15 @@ char* stmp_admiral_map_client_to_endpoint(char* client) {
     }
 
     return NULL;
+}
+
+static char* endpoint[] = {
+    "admiral",
+    "hotel",
+    "scheduler"
+};
+
+char* stmp_admiral_map_id_to_endpoint(u8 id) {
+    return endpoint[id];
 }
 
